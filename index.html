@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELITE CLASS - النخبة التعليمية</title>
+    
+    <!-- المكتبات الأساسية -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Firebase Compat SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- الأيقونات والخطوط -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Tajawal', sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; overflow-x: hidden; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .card { background: white; border-radius: 35px; border: 1px solid #f1f5f9; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.03); transition: all 0.3s ease; }
+        .glass-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid #f1f5f9; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        iframe { width: 100%; height: 100%; border: none; border-radius: 25px; min-height: 500px; background: white; }
+        .btn-social { transition: all 0.3s ease; border-radius: 20px; display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; padding: 18px; font-weight: bold; border: 2px solid #f1f5f9; }
+        .btn-social:active { transform: scale(0.95); }
+        .status-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { transform: scale(0.95); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.7; } 100% { transform: scale(0.95); opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- إعدادات Firebase الخاصة بك ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCjy_FtzTP8LkgMlqzgZmXuytmOh77EmeU",
+            authDomain: "eliteclassdz.firebaseapp.com",
+            projectId: "eliteclassdz",
+            storageBucket: "eliteclassdz.firebasestorage.app",
+            messagingSenderId: "550925678178",
+            appId: "1:550925678178:web:5688a62f42d6e64806833b"
+        };
+
+        // تهيئة Firebase
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        const { useState, useEffect, useRef } = React;
+
+        function App() {
+            const [profile, setProfile] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [view, setView] = useState('selection'); 
+            const [role, setRole] = useState(null);
+            const [activeTab, setActiveTab] = useState('home');
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+            useEffect(() => {
+                // مؤقت أمان لتجاوز شاشة التحميل إذا تأخر الرد
+                const timeout = setTimeout(() => { if (loading) setLoading(false); }, 4000);
+
+                const unsub = auth.onAuthStateChanged(async (u) => {
+                    if (u) {
+                        try {
+                            const snap = await db.collection('users').doc(u.uid).get();
+                            if (snap.exists) {
+                                setProfile(snap.data());
+                                setView('main');
+                            } else {
+                                setView('auth');
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            setView('selection');
+                        }
+                    } else {
+                        setView('selection');
+                    }
+                    setLoading(false);
+                    clearTimeout(timeout);
+                });
+                return () => { unsub(); clearTimeout(timeout); };
+            }, []);
+
+            if (loading) return (
+                <div className="h-screen flex flex-col items-center justify-center bg-white">
+                    <div className="loader mb-4"></div>
+                    <p className="font-bold text-blue-600">جاري تشغيل النخبة...</p>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen">
+                    {view === 'selection' && <SelectionView onSelect={(r) => { setRole(r); setView('auth'); }} />}
+                    {view === 'auth' && <AuthView role={role} onBack={() => setView('selection')} />}
+                    {view === 'main' && profile && (
+                        <div className="flex flex-col h-screen overflow-hidden">
+                            <Header profile={profile} onMenu={() => setIsMenuOpen(true)} />
+                            <main className="flex-1 overflow-y-auto p-4 pb-24">
+                                <ContentView tab={activeTab} profile={profile} onTab={setActiveTab} />
+                            </main>
+                            <BottomNav active={activeTab} onTab={setActiveTab} />
+                            {isMenuOpen && <Sidebar onClose={() => setIsMenuOpen(false)} onTab={(t) => { setActiveTab(t); setIsMenuOpen(false); }} />}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function SelectionView({ onSelect }) {
+            return (
+                <div className="h-screen flex flex-col items-center justify-center p-6 space-y-8 bg-white">
+                    <h1 className="text-5xl font-black text-blue-600 tracking-tighter">ELITE CLASS</h1>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-md">
+                        <button onClick={() => onSelect('teacher')} className="bg-slate-50 border border-slate-100 p-10 rounded-[40px] flex flex-col items-center gap-4 hover:bg-blue-50 transition active:scale-95">
+                            <div className="w-20 h-20 bg-blue-600 text-white rounded-full flex items-center justify-center text-3xl shadow-lg shadow-blue-100"><i className="fas fa-user-tie"></i></div>
+                            <span className="font-black text-lg">أنا أستاذ</span>
+                        </button>
+                        <button onClick={() => onSelect('student')} className="bg-slate-50 border border-slate-100 p-10 rounded-[40px] flex flex-col items-center gap-4 hover:bg-indigo-50 transition active:scale-95">
+                            <div className="w-20 h-20 bg-indigo-600 text-white rounded-full flex items-center justify-center text-3xl shadow-lg shadow-indigo-100"><i className="fas fa-graduation-cap"></i></div>
+                            <span className="font-black text-lg">أنا تلميذ</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        function AuthView({ role, onBack }) {
+            const [error, setError] = useState('');
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            const handleLogin = async () => {
+                setError('');
+                setIsSubmitting(true);
+                const provider = new firebase.auth.GoogleAuthProvider();
+                try {
+                    const result = await auth.signInWithPopup(provider);
+                    const u = result.user;
+                    const snap = await db.collection('users').doc(u.uid).get();
+                    if (!snap.exists) {
+                        await db.collection('users').doc(u.uid).set({
+                            uid: u.uid,
+                            email: u.email,
+                            firstName: u.displayName.split(' ')[0],
+                            lastName: u.displayName.split(' ').slice(1).join(' ') || '',
+                            role: role || 'student',
+                            avatarUrl: u.photoURL || 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
+                            points: 0
+                        });
+                    }
+                } catch (err) {
+                    console.error(err);
+                    setError("حدث خطأ. تأكد من تفعيل Google Auth في Firebase وإضافة رابط موقعك في Authorized Domains.");
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            return (
+                <div className="p-6 max-w-md mx-auto h-screen flex flex-col items-center justify-center bg-white">
+                    <button onClick={onBack} className="absolute top-8 right-8 text-slate-300 p-2"><i className="fas fa-chevron-right text-2xl"></i></button>
+                    <div className="text-center mb-12">
+                        <h2 className="text-4xl font-black mb-4">تسجيل الدخول</h2>
+                        <p className="text-slate-400 font-medium">استخدم حساب Google للدخول كـ {role === 'teacher' ? 'أستاذ' : 'تلميذ'}</p>
+                    </div>
+                    <button onClick={handleLogin} disabled={isSubmitting} className="btn-social bg-white hover:bg-slate-50 text-slate-700">
+                        <img src="https://cdn-icons-png.flaticon.com/512/300/300221.png" className="w-6 h-6" />
+                        <span>الدخول بواسطة Google</span>
+                    </button>
+                    {isSubmitting && <div className="mt-8 loader w-6 h-6 border-2"></div>}
+                    {error && <p className="mt-6 text-red-500 text-center font-bold text-sm bg-red-50 p-4 rounded-2xl w-full">{error}</p>}
+                </div>
+            );
+        }
+
+        function Header({ profile, onMenu }) {
+            return (
+                <header className="bg-white border-b border-slate-50 p-5 flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                        <button onClick={onMenu} className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-600"><i className="fas fa-bars-staggered"></i></button>
+                        <h1 className="font-black text-xl text-blue-600">ELITE CLASS</h1>
+                    </div>
+                    <div className="flex items-center gap-3 bg-slate-50 p-1 pr-4 rounded-full border border-slate-100">
+                        <div className="text-left"><p className="text-xs font-black leading-none">{profile.firstName}</p><p className="text-[9px] text-blue-500 font-bold uppercase">{profile.role === 'teacher' ? 'أستاذ' : 'تلميذ'}</p></div>
+                        <img src={profile.avatarUrl} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" referrerPolicy="no-referrer" />
+                    </div>
+                </header>
+            );
+        }
+
+        function ContentView({ tab, profile, onTab }) {
+            switch(tab) {
+                case 'home': return <HomeView profile={profile} />;
+                case 'chat': return <ChatView profile={profile} />;
+                case 'exams': return <iframe src="https://www.dzexams.com" />;
+                case 'ai': return <iframe src="https://gemini.google.com" />;
+                case 'calc': return <iframe src="https://eddirasa.com/ens-sec/2as/average/" />;
+                case 'classes': return <ClassesView profile={profile} />;
+                case 'info': return <InfoView />;
+                default: return <HomeView profile={profile} />;
+            }
+        }
+
+        function HomeView({ profile }) {
+            return (
+                <div className="space-y-6">
+                    <div className="card p-10 text-center">
+                        <img src={profile.avatarUrl} className="w-32 h-32 rounded-full mx-auto mb-6 border-4 border-blue-50 shadow-inner" referrerPolicy="no-referrer" />
+                        <h2 className="text-3xl font-black mb-2">أهلاً بك، {profile.firstName}!</h2>
+                        <p className="text-slate-400 font-medium">نتمنى لك يوماً دراسياً مليئاً بالنجاح</p>
+                        <div className="grid grid-cols-2 gap-4 mt-8">
+                            <div className="bg-blue-50 p-6 rounded-[30px]"><p className="text-xs text-blue-600 font-black mb-1 uppercase">النقاط</p><p className="text-3xl font-black text-blue-700">{profile.points || 0}</p></div>
+                            <div className="bg-indigo-50 p-6 rounded-[30px]"><p className="text-xs text-indigo-600 font-black mb-1 uppercase">الرتبة</p><p className="text-lg font-black text-indigo-700">{profile.role === 'teacher' ? 'أستاذ' : 'تلميذ'}</p></div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function ChatView({ profile }) {
+            const [code, setCode] = useState('');
+            const [cls, setCls] = useState(null);
+            const [msgs, setMsgs] = useState([]);
+            const [text, setText] = useState('');
+            const scroll = useRef();
+
+            useEffect(() => {
+                if (cls) {
+                    const unsub = db.collection(`classes/${cls.id}/messages`).orderBy('timestamp', 'asc').onSnapshot(s => {
+                        setMsgs(s.docs.map(d => ({ id: d.id, ...d.data() })));
+                        setTimeout(() => scroll.current?.scrollTo(0, scroll.current.scrollHeight), 100);
+                    });
+                    return unsub;
+                }
+            }, [cls]);
+
+            const join = async () => {
+                if (!code) return;
+                const s = await db.collection('classes').where('chatCode', '==', code).get();
+                if (!s.empty) setCls({ id: s.docs[0].id, ...s.docs[0].data() });
+                else alert('كود القسم غير صحيح');
+            };
+
+            const send = async () => {
+                if (!text || !cls) return;
+                await db.collection(`classes/${cls.id}/messages`).add({
+                    senderId: auth.currentUser.uid, senderName: profile.firstName, senderAvatar: profile.avatarUrl, text, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                setText('');
+            };
+
+            if (!cls) return (
+                <div className="h-full flex flex-col items-center justify-center p-6 space-y-6">
+                    <div className="w-24 h-24 bg-blue-50 text-blue-600 rounded-[35px] flex items-center justify-center text-4xl shadow-sm"><i className="fas fa-comments"></i></div>
+                    <h2 className="text-2xl font-black">انضم لغرفة الصف</h2>
+                    <input type="text" placeholder="أدخل الكود (8 أرقام)" className="w-full max-w-xs p-5 bg-white border border-slate-200 rounded-3xl text-center font-black text-2xl tracking-widest outline-none focus:ring-2 ring-blue-500" value={code} onChange={e=>setCode(e.target.value)} />
+                    <button onClick={join} className="w-full max-w-xs py-5 bg-blue-600 text-white rounded-3xl font-black shadow-xl shadow-blue-100">انضمام الآن</button>
+                </div>
+            );
+
+            return (
+                <div className="h-full flex flex-col -m-4">
+                    <div className="p-5 border-b bg-white flex justify-between items-center font-bold text-blue-600">{cls.name} <button onClick={()=>setCls(null)} className="text-slate-300"><i className="fas fa-times"></i></button></div>
+                    <div className="flex-1 overflow-y-auto p-5 space-y-5 bg-slate-50" ref={scroll}>
+                        {msgs.map(m => (
+                            <div key={m.id} className={`flex gap-3 max-w-[85%] ${m.senderId === auth.currentUser.uid ? 'mr-auto flex-row-reverse' : 'ml-auto'}`}>
+                                <img src={m.senderAvatar} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" referrerPolicy="no-referrer" />
+                                <div className={`p-4 rounded-3xl shadow-sm ${m.senderId === auth.currentUser.uid ? 'bg-blue-600 text-white rounded-tl-none' : 'bg-white rounded-tr-none'}`}>
+                                    <p className="text-[10px] font-bold opacity-60 mb-1">{m.senderName}</p>
+                                    <p className="text-sm font-medium leading-relaxed">{m.text}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="p-4 bg-white border-t flex gap-3">
+                        <input type="text" placeholder="اكتب رسالتك..." className="flex-1 bg-slate-50 rounded-2xl px-6 py-3 outline-none border border-slate-100" value={text} onChange={e=>setText(e.target.value)} onKeyPress={e=>e.key==='Enter'&&send()} />
+                        <button onClick={send} className="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-100"><i className="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            );
+        }
+
+        function ClassesView({ profile }) {
+            const [classes, setClasses] = useState([]);
+            const [showAdd, setShowAdd] = useState(false);
+            const [showAddStudent, setShowAddStudent] = useState(false);
+            const [name, setName] = useState('');
+            const [sName, setSName] = useState('');
+            const [sel, setSel] = useState(null);
+            const [students, setStudents] = useState([]);
+
+            useEffect(() => {
+                if (profile.role === 'teacher') {
+                    return db.collection('classes').where('teacherId', '==', auth.currentUser.uid).onSnapshot(s => setClasses(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                }
+            }, [profile.role]);
+
+            useEffect(() => {
+                if (sel) {
+                    return db.collection(`classes/${sel.id}/students`).onSnapshot(s => setStudents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                }
+            }, [sel]);
+
+            const addClass = async () => {
+                if (!name) return;
+                const code = Math.floor(10000000 + Math.random() * 90000000).toString();
+                await db.collection('classes').add({ name, teacherId: auth.currentUser.uid, chatCode: code });
+                setShowAdd(false); setName('');
+            };
+
+            const addStudent = async () => {
+                if (!sName || !sel) return;
+                await db.collection(`classes/${sel.id}/students`).add({ fullName: sName, participation: 0, test1: 0, exam: 0, classification: 'متوسط' });
+                setSName(''); setShowAddStudent(false);
+            };
+
+            const updatePoint = async (sid, field, val) => {
+                const ref = db.collection(`classes/${sel.id}/students`).doc(sid);
+                const updates = { [field]: Number(val) };
+                if (['test1', 'exam'].includes(field)) {
+                    const s = students.find(x => x.id === sid);
+                    const avg = (Number(updates.test1 || s.test1 || 0) + Number(updates.exam || s.exam || 0)) / 2;
+                    updates.classification = avg >= 18 ? 'ممتاز' : avg >= 10 ? 'متوسط' : 'ضعيف';
+                }
+                await ref.set(updates, { merge: true });
+            };
+
+            if (profile.role === 'student') return <div className="h-full flex flex-col items-center justify-center text-center p-6"><div className="w-24 h-24 bg-red-50 text-red-500 rounded-[35px] flex items-center justify-center text-4xl mb-6"><i className="fas fa-lock"></i></div><h2 className="text-2xl font-black mb-2">قسم الأساتذة</h2><p className="text-slate-400">هذه المنطقة مخصصة للأستاذ فقط لإدارة الأقسام والطلاب.</p></div>;
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center"><h2 className="text-2xl font-black">أقسامك الدراسية</h2><button onClick={()=>setShowAdd(true)} className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-blue-100"><i className="fas fa-plus"></i></button></div>
+                    <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+                        {classes.map(c => (
+                            <button key={c.id} onClick={()=>setSel(c)} className={`min-w-[160px] p-8 rounded-[40px] border transition-all text-right ${sel?.id === c.id ? 'bg-blue-600 border-blue-600 text-white shadow-xl shadow-blue-200' : 'bg-white border-slate-100 text-slate-600'}`}>
+                                <p className="font-black text-xl mb-1">{c.name}</p><p className="text-[10px] font-bold opacity-70">كود الشات: {c.chatCode}</p>
+                            </button>
+                        ))}
+                    </div>
+                    {sel && (
+                        <div className="card p-8 overflow-x-auto">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-black text-xl text-blue-600">طلاب {sel.name}</h3>
+                                <button onClick={()=>setShowAddStudent(true)} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-bold text-xs"><i className="fas fa-user-plus ml-1"></i> إضافة طالب</button>
+                            </div>
+                            <table className="w-full text-xs text-right">
+                                <thead className="bg-slate-50 text-slate-400"><tr><th className="p-4 rounded-r-2xl">الاسم</th><th className="p-4">مشاركة</th><th className="p-4">فرض</th><th className="p-4">امتحان</th><th className="p-4 rounded-l-2xl">التقييم</th></tr></thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {students.map(s => (
+                                        <tr key={s.id}>
+                                            <td className="p-4 font-black">{s.fullName}</td>
+                                            <td className="p-4"><input type="number" className="w-12 p-2 bg-slate-50 border-none rounded-lg text-center font-bold" value={s.participation} onChange={e=>updatePoint(s.id, 'participation', e.target.value)} /></td>
+                                            <td className="p-4"><input type="number" className="w-12 p-2 bg-slate-50 border-none rounded-lg text-center font-bold" value={s.test1} onChange={e=>updatePoint(s.id, 'test1', e.target.value)} /></td>
+                                            <td className="p-4"><input type="number" className="w-12 p-2 bg-slate-50 border-none rounded-lg text-center font-bold" value={s.exam} onChange={e=>updatePoint(s.id, 'exam', e.target.value)} /></td>
+                                            <td className="p-4"><span className={`px-3 py-1 rounded-full font-black text-[10px] ${s.classification==='ممتاز'?'bg-green-100 text-green-600':s.classification==='ضعيف'?'bg-red-100 text-red-600':'bg-blue-100 text-blue-600'}`}>{s.classification || 'متوسط'}</span></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    {showAdd && (
+                        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-6 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-sm rounded-[45px] p-10 space-y-5 shadow-2xl">
+                                <h3 className="font-black text-2xl">إنشاء قسم جديد</h3>
+                                <input type="text" placeholder="اسم القسم" className="w-full p-5 bg-slate-50 rounded-2xl outline-none" value={name} onChange={e=>setName(e.target.value)} />
+                                <button onClick={addClass} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-100">تأكيد الإنشاء</button>
+                                <button onClick={()=>setShowAdd(false)} className="w-full py-5 bg-slate-100 text-slate-400 rounded-2xl font-black">إلغاء</button>
+                            </div>
+                        </div>
+                    )}
+                    {showAddStudent && (
+                        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-6 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-sm rounded-[45px] p-10 space-y-5 shadow-2xl">
+                                <h3 className="font-black text-2xl">إضافة طالب</h3>
+                                <input type="text" placeholder="اسم الطالب الكامل" className="w-full p-5 bg-slate-50 rounded-2xl outline-none" value={sName} onChange={e=>setSName(e.target.value)} />
+                                <button onClick={addStudent} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-100">إضافة</button>
+                                <button onClick={()=>setShowAddStudent(false)} className="w-full py-5 bg-slate-100 text-slate-400 rounded-2xl font-black">إلغاء</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function InfoView() {
+            return (
+                <div className="card p-10 text-center space-y-6">
+                    <div className="w-24 h-24 bg-blue-600 text-white rounded-[35px] flex items-center justify-center mx-auto text-4xl shadow-xl shadow-blue-100"><i className="fas fa-info-circle"></i></div>
+                    <h2 className="text-3xl font-black">حول ELITE CLASS</h2>
+                    <div className="text-right space-y-4 font-bold">
+                        <div className="p-5 bg-slate-50 rounded-3xl flex justify-between items-center"><span>المطور:</span><span className="text-blue-600">بن شعبان اسامة</span></div>
+                        <div className="p-5 bg-slate-50 rounded-3xl flex justify-between items-center"><span>بإشراف:</span><span>الحاج علي هشام</span></div>
+                    </div>
+                </div>
+            );
+        }
+
+        function BottomNav({ active, onTab }) {
+            return (
+                <nav className="fixed bottom-0 left-0 right-0 glass-nav p-5 flex justify-around items-center rounded-t-[45px] z-50 shadow-2xl">
+                    <button onClick={()=>onTab('home')} className={active==='home'?'text-blue-600':'text-slate-300'}><i className="fas fa-house text-2xl"></i></button>
+                    <button onClick={()=>onTab('chat')} className={active==='chat'?'text-blue-600':'text-slate-300'}><i className="fas fa-comments text-2xl"></i></button>
+                    <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center -mt-14 border-[8px] border-[#f8fafc] shadow-2xl text-white shadow-blue-200"><i className="fas fa-plus text-xl"></i></div>
+                    <button onClick={()=>onTab('classes')} className={active==='classes'?'text-blue-600':'text-slate-300'}><i className="fas fa-users-rectangle text-2xl"></i></button>
+                    <button onClick={()=>onTab('info')} className={active==='info'?'text-blue-600':'text-slate-300'}><i className="fas fa-circle-info text-2xl"></i></button>
+                </nav>
+            );
+        }
+
+        function Sidebar({ onClose, onTab }) {
+            const items = [
+                { id: 'home', label: 'الرئيسية', icon: 'fa-house' },
+                { id: 'chat', label: 'غرفة الشات', icon: 'fa-comments' },
+                { id: 'exams', label: 'بنك النماذج', icon: 'fa-file-lines' },
+                { id: 'ai', label: 'مساعد الذكاء', icon: 'fa-robot' },
+                { id: 'calc', label: 'حساب المعدل', icon: 'fa-calculator' },
+                { id: 'classes', label: 'إدارة الأقسام', icon: 'fa-users-gear' },
+                { id: 'info', label: 'عن التطبيق', icon: 'fa-circle-info' },
+            ];
+            return (
+                <div className="fixed inset-0 z-[100]">
+                    <div onClick={onClose} className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+                    <aside className="absolute top-0 right-0 bottom-0 w-80 bg-white p-8 shadow-2xl flex flex-col rounded-l-[50px]">
+                        <div className="flex justify-between items-center mb-10"><h3 className="font-black text-2xl text-blue-600">القائمة</h3><button onClick={onClose} className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center"><i className="fas fa-times"></i></button></div>
+                        <div className="flex-1 space-y-3">
+                            {items.map(i => (
+                                <button key={i.id} onClick={()=>onTab(i.id)} className="w-full flex items-center gap-5 p-5 rounded-[25px] font-black text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition">
+                                    <i className={`fas ${i.icon} w-6 text-xl`}></i><span>{i.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={()=>auth.signOut()} className="w-full flex items-center gap-5 p-5 rounded-[25px] font-black text-red-500 hover:bg-red-50 transition mt-4"><i className="fas fa-power-off w-6 text-xl"></i><span>تسجيل الخروج</span></button>
+                    </aside>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
